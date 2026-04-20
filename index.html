@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>みらい予報図</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ═══════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════ */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:#1a1e26;background:#eef1f6}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+/* ═══════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════ */
+#hdr{
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  height:48px;background:#0a6ebd;
+  display:flex;align-items:center;padding:0 14px;gap:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,.22);
+}
+.hdr-logo{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.hdr-logo-text{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.01em;line-height:1}
+.hdr-logo-sub{font-size:8px;color:rgba(255,255,255,.6);letter-spacing:.06em;margin-top:2px}
+.hdr-sep{width:1px;height:26px;background:rgba(255,255,255,.22)}
+.hdr-cust{display:flex;align-items:center;gap:6px}
+.hdr-cust-lbl{font-size:10px;color:rgba(255,255,255,.7)}
+.hdr-cust input{
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);
+  border-radius:4px;padding:3px 8px;color:#fff;font-family:inherit;
+  font-size:12px;font-weight:500;width:80px;outline:none;
+}
+.hdr-date{font-size:10px;color:rgba(255,255,255,.55);white-space:nowrap}
+.hdr-tabs{flex:1;display:flex;align-items:center;justify-content:center;gap:6px}
+.htab{
+  padding:5px 16px;border:none;border-radius:5px;font-family:inherit;
+  font-size:11px;cursor:pointer;font-weight:500;transition:all .15s;
+}
+.htab.on{background:#fff;color:#0a6ebd}
+.htab.off{background:rgba(255,255,255,.14);color:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,.2)}
+.htab.off:hover{background:rgba(255,255,255,.24)}
+.htab.red-on{background:#d93a3a;color:#fff;border:none}
+.htab.red-off{background:rgba(217,58,58,.4);color:#fff;border:1px solid rgba(255,255,255,.18)}
+/* グラフ/シート切替ボタン */
+.hdr-views{display:flex;gap:4px}
+.vbtn{
+  width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;
+  background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.vbtn svg{stroke:rgba(255,255,255,.8)}
+/* ▼ アクティブ時：黄色ハイライト */
+.vbtn.active{background:#ffd000;border:none}
+.vbtn.active svg{stroke:#0a3a6e}
+.vbtn:hover:not(.active){background:rgba(255,255,255,.28)}
+
+/* ═══════════════════════════════════════════
+   APP LAYOUT
+═══════════════════════════════════════════ */
+#app{display:flex;margin-top:48px;height:calc(100vh - 48px)}
+
+/* ═══════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════ */
+#sidebar{
+  width:200px;min-width:140px;max-width:420px;
+  flex-shrink:0;
+  background:#0a6ebd;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+/* 家族構成ブロック：固定表示 */
+#sb-fixed{
+  flex-shrink:0;
+  background:#0a6ebd;
+  border-bottom:2px solid rgba(255,255,255,.2);
+}
+/* 下部スクロール領域 */
+#sb-scroll{
+  flex:1;overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.25) transparent;
+}
+#sb-scroll::-webkit-scrollbar{width:3px}
+#sb-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:2px}
+
+/* section */
+.sb-sec{border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 10px;background:rgba(0,0,0,.16);
+  color:#fff;font-size:10px;font-weight:500;letter-spacing:.04em;
+  cursor:pointer;user-select:none;
+}
+.sb-hd:hover{background:rgba(0,0,0,.24)}
+.sb-hd-l{display:flex;align-items:center;gap:6px}
+.sb-hd-arrow{font-size:9px;opacity:.7;transition:transform .2s}
+.sb-hd-arrow.open{transform:rotate(180deg)}
+.sb-ico{
+  width:18px;height:18px;border-radius:3px;
+  background:rgba(255,255,255,.18);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.sb-body{padding:8px 10px;display:none;background:rgba(0,0,0,.07)}
+.sb-body.open{display:block}
+
+/* フィールド */
+.f-group{display:flex;flex-direction:column;gap:5px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.f{display:flex;flex-direction:column;gap:2px}
+.f > label{font-size:9px;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iw{/* input wrap */
+  display:flex;align-items:center;
+  background:rgba(255,255,255,.95);border-radius:3px;
+  border:1px solid rgba(255,255,255,.4);overflow:hidden;
+}
+.iw:focus-within{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+.iw input,.iw select{
+  flex:1;min-width:0;padding:4px 5px;
+  font-size:11px;font-family:'DM Mono','Noto Sans JP',monospace;
+  color:#1a1e26;background:transparent;border:none;outline:none;
+  text-align:right;width:100%;
+}
+.iw select{text-align:left;font-family:'Noto Sans JP',sans-serif;font-size:10px;cursor:pointer}
+.iw .u{
+  padding:0 4px;font-size:9px;color:rgba(0,0,0,.38);
+  background:rgba(0,0,0,.04);border-left:1px solid rgba(0,0,0,.07);
+  white-space:nowrap;flex-shrink:0;
+}
+.sec-div{
+  font-size:9px;color:rgba(255,255,255,.42);
+  border-top:1px solid rgba(255,255,255,.1);
+  margin:6px 0 4px;padding-top:4px;letter-spacing:.04em;
+}
+/* 家族行 */
+.fam-r{
+  display:grid;
+  grid-template-columns:14px 30px 1fr auto auto;
+  align-items:center;gap:3px;
+  background:rgba(0,0,0,.1);border-radius:3px;padding:4px 6px;margin-bottom:4px;
+}
+.fam-r .fname{font-size:9px;color:rgba(255,255,255,.75);font-weight:500;white-space:nowrap}
+.fam-r .iw.name-iw input{font-size:10px;padding:3px 4px;min-width:0}
+/* 年齢selectラッパー：幅を数字だけに最適化 */
+.fam-r .age-wrap{
+  display:flex;align-items:center;
+  background:rgba(255,255,255,.95);border-radius:3px;
+  border:1px solid rgba(255,255,255,.4);overflow:hidden;
+  width:34px;flex-shrink:0;
+}
+.fam-r .age-wrap select{
+  width:100%;padding:3px 1px;
+  font-size:10px;font-family:'Noto Sans JP',sans-serif;
+  color:#1a1e26;background:transparent;border:none;outline:none;
+  text-align:center;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+}
+/* 「歳」は外側テキスト */
+.fam-r .age-label{
+  font-size:9px;color:rgba(255,255,255,.6);white-space:nowrap;
+}
+
+/* RUN BUTTON */
+.run-btn{
+  width:calc(100% - 16px);margin:8px;
+  padding:8px;background:#fff;color:#0a6ebd;
+  font-family:inherit;font-size:12px;font-weight:700;
+  border:none;border-radius:5px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:all .15s;
+}
+.run-btn:hover{background:#e0f0ff;transform:translateY(-1px)}
+.run-btn:active{transform:translateY(0)}
+
+/* ═══════════════════════════════════════════
+   RESIZER
+═══════════════════════════════════════════ */
+#resizer{
+  width:4px;flex-shrink:0;cursor:col-resize;
+  background:#0858a0;position:relative;z-index:10;
+  transition:background .15s;
+}
+#resizer:hover,#resizer.drag{background:#3da8ff}
+#resizer::after{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  width:1px;height:28px;
+  background:rgba(255,255,255,.3);border-radius:1px;
+  box-shadow:2px 0 rgba(255,255,255,.15),-2px 0 rgba(255,255,255,.15);
+}
+
+/* ═══════════════════════════════════════════
+   MAIN
+═══════════════════════════════════════════ */
+#main{flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column}
+
+/* ═══════════════════════════════════════════
+   SUMMARY CARDS (グラフビュー上部)
+═══════════════════════════════════════════ */
+#summary{
+  display:grid;grid-template-columns:repeat(5,1fr);gap:6px;
+  padding:8px 10px 0;flex-shrink:0;
+}
+.scard{
+  background:#fff;border-radius:7px;padding:8px 10px;
+  box-shadow:0 1px 3px rgba(0,0,0,.07);border:1px solid rgba(0,0,0,.05);
+}
+.scard-lbl{font-size:9px;color:#888;letter-spacing:.04em;margin-bottom:3px}
+.scard-val{font-family:'DM Mono',monospace;font-size:16px;font-weight:500;line-height:1}
+.scard-val.green{color:#1e8a4a}
+.scard-val.red{color:#c0392b}
+.scard-val.blue{color:#1565c0}
+.scard-val.amber{color:#c77700}
+.scard-sub{font-size:9px;color:#aaa;margin-top:2px}
+
+/* ═══════════════════════════════════════════
+   GRAPH VIEW
+═══════════════════════════════════════════ */
+#graphView{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+#graphView::-webkit-scrollbar{width:5px}
+#graphView::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+.chart-card{background:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.chart-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.chart-hd-title{font-size:12px;font-weight:500;color:#333}
+.legend{display:flex;flex-wrap:wrap;gap:8px}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:#666}
+.leg-sq{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.leg-line{width:14px;border-top:2px solid;flex-shrink:0}
+.cw{position:relative;width:100%}
+.cw.h240{height:240px}
+.cw.h200{height:200px}
+
+/* ライフイベントバー */
+#eventBar{
+  background:#fff;border-radius:8px;padding:10px 14px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07);
+  overflow-x:auto;
+}
+.evt-track{display:flex;align-items:center;gap:0;min-width:max-content;position:relative;height:32px}
+.evt-marker{
+  display:flex;flex-direction:column;align-items:center;
+  position:absolute;transform:translateX(-50%);
+  cursor:default;
+}
+.evt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.evt-label{font-size:8px;color:#555;white-space:nowrap;margin-top:2px}
+
+/* ═══════════════════════════════════════════
+   SHEET VIEW
+═══════════════════════════════════════════ */
+#sheetView{flex:1;overflow:auto;display:none}
+#sheetView::-webkit-scrollbar{width:5px;height:5px}
+#sheetView::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
+table.sh{border-collapse:collapse;font-size:11px;white-space:nowrap;font-family:'DM Mono','Noto Sans JP',monospace}
+table.sh th,table.sh td{padding:3px 8px;border:1px solid #d6e2ef;text-align:right}
+table.sh th{
+  background:#0a6ebd;color:#fff;font-weight:500;font-size:10px;
+  position:sticky;top:0;z-index:10;font-family:'Noto Sans JP',sans-serif;
+}
+table.sh th.rh{position:sticky;left:0;z-index:20;background:#084fa0;text-align:left;min-width:72px;padding:3px 8px}
+table.sh td.rh{
+  position:sticky;left:0;z-index:5;
+  background:#e2edf8;color:#084fa0;font-weight:500;
+  font-size:10px;text-align:left;border-right:2px solid #9cc0dc;
+  font-family:'Noto Sans JP',sans-serif;padding:3px 6px;min-width:72px;
+}
+table.sh tr.sec-r td{background:#c3daf2;font-weight:700;color:#063870;font-family:'Noto Sans JP',sans-serif}
+table.sh tr.sec-r td.rh{background:#a8c8e8}
+table.sh tr.tot-r td{background:#dde8f5;font-weight:600}
+table.sh tr.tot-r td.rh{background:#c8dcee}
+table.sh tr.asset-r td{background:#fff8d6;font-weight:700;color:#705000}
+table.sh tr.asset-r td.rh{background:#ffe77a;color:#4a3500;font-family:'Noto Sans JP',sans-serif}
+table.sh td.neg{color:#b52020;font-weight:500}
+table.sh td.pos{color:#186b38}
+table.sh td.blu{color:#1050a0;font-weight:500}
+table.sh td.z{color:#ccc}
+
+/* ────── ホバーハイライト ──────
+   ① マウスが乗っているセル → 黄色（最優先）
+   ② 同じ列の他セル        → 薄青（col-hl）
+   ③ 列ヘッダー            → 濃青（col-hd-hl）
+   ④ 行ラベル（.rh）       → 薄青（tr:hover時のみ）
+   ⑤ 行全体の薄青は廃止    → tr:hover には何もかけない
+──────────────────────────────── */
+
+/* ① マウスオーバーセルのみ黄色（!importantで最優先） */
+table.sh tbody td:not(.rh):hover{
+  background:#ffd700 !important;
+  color:#1a1000 !important;
+  cursor:default;
+}
+/* ④ 行ラベルは行ホバー時に薄青 */
+table.sh tbody tr:hover td.rh{
+  background:#c0d8ee !important;
+  color:#032a60 !important;
+}
+/* ② 列ハイライト（JSで付与・行全体よりは薄く） */
+table.sh td.col-hl{background:rgba(10,110,189,.09) !important}
+/* ③ 列ヘッダー */
+table.sh th.col-hd-hl{background:#063fa0 !important}
+/* ラベル列はホバーでも変えない（rh自体のホバーは④で統一） */
+table.sh tbody td.rh:hover{background:#c0d8ee !important;cursor:default}
+
+/* ═══════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════ */
+#ftr{
+  height:44px;background:#0a6ebd;border-top:1px solid #0858a0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;flex-shrink:0;
+}
+.ftr-g{display:flex;gap:20px}
+.fbtn{
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+  color:rgba(255,255,255,.8);font-size:9px;cursor:pointer;
+}
+.fbtn:hover{color:#fff}
+.fbtn svg{display:block}
+</style>
+
+<!-- SVG スプライト -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-logo" viewBox="0 0 34 26">
+    <circle cx="12" cy="13" r="5.5" fill="#FFD84D"/>
+    <line x1="12" y1="4" x2="12" y2="1.5" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="12" y1="24.5" x2="12" y2="22" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="3" y1="13" x2="0.5" y2="13" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="23.5" y1="13" x2="21" y2="13" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="5.5" y1="5.5" x2="3.7" y2="3.7" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="18.5" y1="18.5" x2="20.3" y2="20.3" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <line x1="18.5" y1="5.5" x2="20.3" y2="3.7" stroke="#FFD84D" stroke-width="1.8" stroke-linecap="round"/>
+    <rect x="17" y="13" width="17" height="9" rx="4.5" fill="white"/>
+    <rect x="20" y="9" width="11" height="8" rx="4" fill="white"/>
+    <rect x="24" y="7" width="7" height="6" rx="3" fill="white"/>
+  </symbol>
+  <symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="4.5" r="3" stroke="white" stroke-width="1.4" fill="none"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-male" viewBox="0 0 14 16"><circle cx="7" cy="4" r="2.8" stroke="white" stroke-width="1.3" fill="none"/><path d="M2 15c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-female" viewBox="0 0 14 16"><circle cx="7" cy="4" r="2.8" stroke="white" stroke-width="1.3" fill="none"/><path d="M2 15c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M5 11 Q7 12.5 9 11" stroke="white" stroke-width="1" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-child" viewBox="0 0 14 16"><circle cx="7" cy="5" r="2.2" stroke="white" stroke-width="1.3" fill="none"/><path d="M3 15c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-family" viewBox="0 0 20 16"><circle cx="5" cy="4" r="2.2" stroke="white" stroke-width="1.2" fill="none"/><path d="M1 14c0-2 1.8-3.5 4-3.5s4 1.5 4 3.5" stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="15" cy="4" r="2.2" stroke="white" stroke-width="1.2" fill="none"/><path d="M11 14c0-2 1.8-3.5 4-3.5s4 1.5 4 3.5" stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round"/><circle cx="10" cy="7" r="1.6" stroke="white" stroke-width="1.1" fill="none"/><path d="M7.5 14c0-1.4 1.1-2.5 2.5-2.5s2.5 1.1 2.5 2.5" stroke="white" stroke-width="1.1" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 16 16"><ellipse cx="8" cy="5" rx="5" ry="2" stroke="white" stroke-width="1.3" fill="none"/><line x1="3" y1="5" x2="3" y2="9" stroke="white" stroke-width="1.3"/><line x1="13" y1="5" x2="13" y2="9" stroke="white" stroke-width="1.3"/><ellipse cx="8" cy="9" rx="5" ry="2" stroke="white" stroke-width="1.3" fill="none"/><line x1="3" y1="9" x2="3" y2="12" stroke="white" stroke-width="1.3"/><line x1="13" y1="9" x2="13" y2="12" stroke="white" stroke-width="1.3"/><ellipse cx="8" cy="12" rx="5" ry="2" stroke="white" stroke-width="1.3" fill="none"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 16 16"><path d="M1 2h2l2 7h7l2-5H5" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round" stroke-linecap="round"/><circle cx="7" cy="13" r="1.2" stroke="white" stroke-width="1.2" fill="none"/><circle cx="12" cy="13" r="1.2" stroke="white" stroke-width="1.2" fill="none"/></symbol>
+  <symbol id="i-house" viewBox="0 0 16 16"><path d="M2 8L8 2l6 6" stroke="white" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/><path d="M3.5 7v6.5h9V7" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/><rect x="6" y="10" width="4" height="4" rx="0.5" stroke="white" stroke-width="1.2" fill="none"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 2L13 4.5V9C13 12 10.5 14 8 15 5.5 14 3 12 3 9V4.5Z" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/><polyline points="5.5,8.5 7.5,10.5 11,6.5" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-car" viewBox="0 0 18 14"><path d="M3 8L5 3H13L15 8H3Z" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/><rect x="1" y="8" width="16" height="4" rx="1.5" stroke="white" stroke-width="1.3" fill="none"/><circle cx="4.5" cy="12" r="1.5" stroke="white" stroke-width="1.2" fill="none"/><circle cx="13.5" cy="12" r="1.5" stroke="white" stroke-width="1.2" fill="none"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 16 16"><polyline points="1,13 5,8 9,10 14,3" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polyline points="11,3 14,3 14,6" stroke="white" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="15" x2="15" y2="15" stroke="white" stroke-width="1.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-bar" viewBox="0 0 16 16"><rect x="1" y="8" width="4" height="7" rx="0.5" stroke="white" stroke-width="1.3" fill="none"/><rect x="6" y="4" width="4" height="11" rx="0.5" stroke="white" stroke-width="1.3" fill="none"/><rect x="11" y="6" width="4" height="9" rx="0.5" stroke="white" stroke-width="1.3" fill="none"/></symbol>
+  <symbol id="i-table" viewBox="0 0 16 16"><rect x="1" y="1" width="14" height="14" rx="1" stroke="white" stroke-width="1.3" fill="none"/><line x1="1" y1="5.5" x2="15" y2="5.5" stroke="white" stroke-width="1.2"/><line x1="1" y1="10" x2="15" y2="10" stroke="white" stroke-width="1.2"/><line x1="6" y1="5.5" x2="6" y2="15" stroke="white" stroke-width="1.2"/><line x1="11" y1="5.5" x2="11" y2="15" stroke="white" stroke-width="1.2"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 14 16"><path d="M2 1h7l3 3v11H2V1z" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/><polyline points="9,1 9,4 12,4" stroke="white" stroke-width="1.2" fill="none" stroke-linejoin="round"/><line x1="4" y1="8" x2="10" y2="8" stroke="white" stroke-width="1.2" stroke-linecap="round"/><line x1="4" y1="11" x2="10" y2="11" stroke="white" stroke-width="1.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-save" viewBox="0 0 16 16"><path d="M2 2h9l3 3v9H2V2z" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/><rect x="5" y="2" width="5" height="4" rx="0.5" stroke="white" stroke-width="1.2" fill="none"/><rect x="4" y="9" width="8" height="5" rx="0.5" stroke="white" stroke-width="1.2" fill="none"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 14 16"><polyline points="1,4 13,4" stroke="white" stroke-width="1.3" stroke-linecap="round"/><path d="M3 4v9.5a1 1 0 001 1h6a1 1 0 001-1V4" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/><path d="M5 4V2.5a.5.5 0 01.5-.5h3a.5.5 0 01.5.5V4" stroke="white" stroke-width="1.2" fill="none" stroke-linejoin="round"/></symbol>
+  <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" stroke="white" stroke-width="1.3" fill="none"/><path d="M6 6c0-1.1.9-2 2-2s2 .9 2 2c0 1-.6 1.5-1.3 2C8 8.6 8 9 8 9.5" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round"/><circle cx="8" cy="12" r=".8" fill="white"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 16 16"><path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round"/><polyline points="10,5 13,8 10,11" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="5" y1="8" x2="13" y2="8" stroke="white" stroke-width="1.3" stroke-linecap="round"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 16 16"><polyline points="2,7 8,2 14,7" stroke="white" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><line x1="1" y1="7" x2="15" y2="7" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="1" y1="14" x2="15" y2="14" stroke="white" stroke-width="1.3" stroke-linecap="round"/><line x1="3.5" y1="7" x2="3.5" y2="14" stroke="white" stroke-width="1.2"/><line x1="7" y1="7" x2="7" y2="14" stroke="white" stroke-width="1.2"/><line x1="9" y1="7" x2="9" y2="14" stroke="white" stroke-width="1.2"/><line x1="12.5" y1="7" x2="12.5" y2="14" stroke="white" stroke-width="1.2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 16 16"><polygon points="3,2 14,8 3,14" stroke="white" stroke-width="1.3" fill="none" stroke-linejoin="round"/></symbol>
+</svg>
+</head>
+<body>
+
+<!-- HEADER -->
+<header id="hdr">
+  <div class="hdr-logo">
+    <svg width="34" height="26" viewBox="0 0 34 26"><use href="#i-logo"/></svg>
+    <div>
+      <div class="hdr-logo-text">みらい予報図</div>
+      <div class="hdr-logo-sub">LIFE PLAN SIMULATOR</div>
+    </div>
+  </div>
+  <div class="hdr-sep"></div>
+  <!-- インフレ率（ヘッダーに常時表示） -->
+  <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.85)">
+    <span style="opacity:.7">インフレ率</span>
+    <div style="display:flex;align-items:center;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:4px;overflow:hidden">
+      <input id="inflationRate" type="number" value="0.5" step="0.1" min="0" max="5"
+        style="width:42px;padding:3px 5px;background:transparent;border:none;color:#fff;font-family:inherit;font-size:11px;text-align:right;outline:none"
+        oninput="simulate()">
+      <span style="padding:0 5px;opacity:.6;font-size:10px">%/年</span>
+    </div>
+  </div>
+  <div class="hdr-sep"></div>
+  <!-- 手取り自動計算ボタン -->
+  <button id="calcTakeHome" onclick="calcTakeHomeModal()"
+    style="padding:4px 10px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:4px;color:#fff;font-family:inherit;font-size:10px;cursor:pointer;white-space:nowrap">
+    手取り試算
+  </button>
+  <div style="flex:1"></div>
+  <div class="hdr-views">
+    <button class="vbtn active" id="vbG" onclick="switchView('graph')" title="グラフ">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><use href="#i-bar"/></svg>
+    </button>
+    <button class="vbtn" id="vbS" onclick="switchView('sheet')" title="シート">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><use href="#i-table"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- APP -->
+<div id="app">
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+
+  <!-- ▼ 固定エリア：家族構成・教育 -->
+  <div id="sb-fixed">
+    <div class="sb-sec" style="border-bottom:none">
+      <div class="sb-hd" onclick="toggleSB(this)" style="background:rgba(0,0,0,.2)">
+        <div class="sb-hd-l">
+          <span class="sb-ico"><svg width="14" height="12" viewBox="0 0 20 16" fill="none"><use href="#i-family"/></svg></span>
+          家族構成と教育プラン
+        </div>
+        <span class="sb-hd-arrow open">▲</span>
+      </div>
+      <div class="sb-body open">
+        <div class="f-group">
+          <div class="fam-r">
+            <svg width="12" height="14" viewBox="0 0 14 16" fill="none"><use href="#i-male"/></svg>
+            <span class="fname">本人</span>
+            <div class="iw name-iw"><input id="myName" value="太郎" style="text-align:left;font-size:10px;padding:3px 4px" oninput="simulate()"></div>
+            <div class="age-wrap"><select id="myAge" onchange="simulate()"></select></div><span class="age-label">歳</span>
+          </div>
+          <div class="fam-r">
+            <svg width="12" height="14" viewBox="0 0 14 16" fill="none"><use href="#i-female"/></svg>
+            <span class="fname">配偶者</span>
+            <div class="iw name-iw"><input id="spName" value="花子" style="text-align:left;font-size:10px;padding:3px 4px" oninput="simulate()"></div>
+            <div class="age-wrap"><select id="spAge" onchange="simulate()"></select></div><span class="age-label">歳</span>
+          </div>
+          <div class="fam-r" id="c1Row">
+            <svg width="12" height="14" viewBox="0 0 14 16" fill="none"><use href="#i-child"/></svg>
+            <span class="fname">第一子</span>
+            <div class="iw name-iw"><input id="c1Name" value="一郎" placeholder="名前" style="text-align:left;font-size:10px;padding:3px 4px" oninput="simulate()"></div>
+            <div class="age-wrap"><select id="c1Age" onchange="onChildAgeChange()"></select></div><span class="age-label">歳</span>
+          </div>
+          <div class="fam-r" id="c2Row" style="display:none">
+            <svg width="12" height="14" viewBox="0 0 14 16" fill="none"><use href="#i-child"/></svg>
+            <span class="fname">第二子</span>
+            <div class="iw name-iw"><input id="c2Name" placeholder="名前" style="text-align:left;font-size:10px;padding:3px 4px" oninput="simulate()"></div>
+            <div class="age-wrap"><select id="c2Age" onchange="onChildAgeChange()"></select></div><span class="age-label">歳</span>
+          </div>
+          <div class="fam-r" id="c3Row" style="display:none">
+            <svg width="12" height="14" viewBox="0 0 14 16" fill="none"><use href="#i-child"/></svg>
+            <span class="fname">第三子</span>
+            <div class="iw name-iw"><input id="c3Name" placeholder="名前" style="text-align:left;font-size:10px;padding:3px 4px" oninput="simulate()"></div>
+            <div class="age-wrap"><select id="c3Age" onchange="simulate()"></select></div><span class="age-label">歳</span>
+          </div>
+        </div>
+        <div id="eduSection"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ▼ スクロールエリア：収入〜貯蓄 -->
+  <div id="sb-scroll">
+
+  <!-- 収入 -->
+  <div class="sb-sec">
+    <div class="sb-hd" onclick="toggleSB(this)">
+      <div class="sb-hd-l"><span class="sb-ico"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><use href="#i-coin"/></svg></span>収入</div>
+      <span class="sb-hd-arrow open">▲</span>
+    </div>
+    <div class="sb-body open">
+      <div class="f-group">
+        <div class="sec-div" style="margin-top:0;border-top:none">ご本人</div>
+        <div class="f"><label>年収（手取）</label>
+          <div class="iw"><input id="myIncome" type="number" value="380" oninput="simulate()"><span class="u">万/年</span></div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>就業開始</label>
+            <div class="iw"><input id="myWorkFrom" type="number" value="30" oninput="simulate()"><span class="u">歳</span></div>
+          </div>
+          <div class="f"><label>就業終了</label>
+            <div class="iw"><input id="myWorkTo" type="number" value="65" oninput="simulate()"><span class="u">歳</span></div>
+          </div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>社保</label>
+            <div class="iw"><select id="myPension" onchange="simulate()">
+              <option value="national">国民年金</option>
+              <option value="kosei" selected>厚生年金</option>
+            </select></div>
+          </div>
+          <div class="f"><label>年金受給</label>
+            <div class="iw"><input id="myPensionAge" type="number" value="65" oninput="simulate()"><span class="u">歳</span></div>
+          </div>
+        </div>
+        <div style="font-size:9px;color:rgba(255,255,255,.5);padding:2px 0 4px;text-align:right" id="pensionHint"></div>
+        <div class="f"><label>退職金</label>
+          <div class="iw"><input id="myRetire" type="number" value="1500" oninput="simulate()"><span class="u">万</span></div>
+        </div>
+        <div class="sec-div">配偶者</div>
+        <div class="f"><label>年収（手取）</label>
+          <div class="iw"><input id="spIncome" type="number" value="100" oninput="simulate()"><span class="u">万/年</span></div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>社保</label>
+            <div class="iw"><select id="spPension" onchange="simulate()">
+              <option value="national" selected>国民年金</option>
+              <option value="kosei">厚生年金</option>
+            </select></div>
+          </div>
+          <div class="f"><label>年金受給</label>
+            <div class="iw"><input id="spPensionAge" type="number" value="65" oninput="simulate()"><span class="u">歳</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 生活費 -->
+  <div class="sb-sec">
+    <div class="sb-hd" onclick="toggleSB(this)">
+      <div class="sb-hd-l"><span class="sb-ico"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><use href="#i-cart"/></svg></span>生活費</div>
+      <span class="sb-hd-arrow open">▲</span>
+    </div>
+    <div class="sb-body open">
+      <div class="f-group">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:10px;color:rgba(255,255,255,.7)">月額合計</div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span id="livingTotal" style="font-size:13px;font-weight:600;color:#fff;font-family:'DM Mono',monospace">—</span>
+            <span style="font-size:9px;color:rgba(255,255,255,.6)">万/月</span>
+          </div>
+        </div>
+        <button onclick="openLivingModal()" style="width:100%;padding:5px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:4px;color:#fff;font-family:inherit;font-size:11px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.5"><use href="#i-cart"/></svg>
+          明細入力
+        </button>
+        <div class="f" style="margin-top:5px">
+          <label>老後生活費割合</label>
+          <div class="iw"><input id="retRatio" type="number" value="80" oninput="simulate()"><span class="u">%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 夢購入（本家準拠：自動車×2・その他） -->
+  <div class="sb-sec">
+    <div class="sb-hd" onclick="toggleSB(this)">
+      <div class="sb-hd-l"><span class="sb-ico"><svg width="14" height="10" viewBox="0 0 18 14" fill="none"><use href="#i-car"/></svg></span>夢購入</div>
+      <span class="sb-hd-arrow">▲</span>
+    </div>
+    <div class="sb-body">
+      <div class="f-group">
+        <!-- 自動車（本人） -->
+        <div class="sec-div" style="margin-top:0;border-top:none">自動車（本人）</div>
+        <div class="f2">
+          <div class="f"><label>金額</label><div class="iw"><input id="car1Price" type="number" value="200" oninput="simulate()"><span class="u">万</span></div></div>
+          <div class="f"><label>サイクル</label><div class="iw"><input id="car1Cycle" type="number" value="5" oninput="simulate()"><span class="u">年毎</span></div></div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>開始</label><div class="iw"><input id="car1From" type="number" value="30" oninput="simulate()"><span class="u">歳</span></div></div>
+          <div class="f"><label>終了</label><div class="iw"><input id="car1To" type="number" value="75" oninput="simulate()"><span class="u">歳</span></div></div>
+        </div>
+        <!-- 自動車（配偶者） -->
+        <div class="sec-div">自動車（配偶者）</div>
+        <div class="f2">
+          <div class="f"><label>金額</label><div class="iw"><input id="car2Price" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">万</span></div></div>
+          <div class="f"><label>サイクル</label><div class="iw"><input id="car2Cycle" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">年毎</span></div></div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>開始</label><div class="iw"><input id="car2From" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">歳</span></div></div>
+          <div class="f"><label>終了</label><div class="iw"><input id="car2To" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">歳</span></div></div>
+        </div>
+        <!-- その他 -->
+        <div class="sec-div">その他（共通）</div>
+        <div class="f2">
+          <div class="f"><label>金額</label><div class="iw"><input id="dream3Price" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">万</span></div></div>
+          <div class="f"><label>サイクル</label><div class="iw"><input id="dream3Cycle" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">年毎</span></div></div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>開始</label><div class="iw"><input id="dream3From" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">歳</span></div></div>
+          <div class="f"><label>終了</label><div class="iw"><input id="dream3To" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">歳</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 住宅プラン -->
+  <div class="sb-sec">
+    <div class="sb-hd" onclick="toggleSB(this)">
+      <div class="sb-hd-l"><span class="sb-ico"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><use href="#i-house"/></svg></span>住宅プラン</div>
+      <span class="sb-hd-arrow">▲</span>
+    </div>
+    <div class="sb-body">
+      <div class="f-group">
+        <div class="f2">
+          <div class="f"><label>家賃</label><div class="iw"><input id="rent" type="number" value="9.5" step=".5" oninput="simulate()"><span class="u">万/月</span></div></div>
+          <div class="f"><label>〜何歳まで</label><div class="iw"><input id="rentTo" type="number" value="35" oninput="simulate()"><span class="u">歳</span></div></div>
+        </div>
+        <div class="sec-div">購入</div>
+        <div class="f2">
+          <div class="f"><label>購入年齢</label><div class="iw"><input id="buyAge" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">歳</span></div></div>
+          <div class="f"><label>借入期間</label><div class="iw"><input id="loanPeriod" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">年</span></div></div>
+        </div>
+        <div class="f2">
+          <div class="f"><label>購入金額</label><div class="iw"><input id="buyPrice" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">万</span></div></div>
+          <div class="f"><label>金利</label><div class="iw"><input id="loanRate" type="number" value="0.5" step=".1" oninput="simulate()"><span class="u">%</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 保険料（本家準拠：保険契約ボタン付き） -->
+  <div class="sb-sec">
+    <div class="sb-hd" onclick="toggleSB(this)">
+      <div class="sb-hd-l"><span class="sb-ico"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><use href="#i-shield"/></svg></span>保険料</div>
+      <span class="sb-hd-arrow">▲</span>
+    </div>
+    <div class="sb-body">
+      <div class="f-group">
+        <div class="f"><label>月額合計</label><div class="iw"><input id="insMonthly" type="number" value="2.5" step=".1" oninput="simulate()"><span class="u">万/月</span></div></div>
+        <button onclick="openInsModal()" style="width:100%;margin-top:5px;padding:5px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:4px;color:#fff;font-family:inherit;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" stroke-width="1.4"><use href="#i-shield"/></svg>
+          保険契約の詳細入力
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 貯蓄（本家準拠：4パターン） -->
+  <div class="sb-sec">
+    <div class="sb-hd" onclick="toggleSB(this)">
+      <div class="sb-hd-l"><span class="sb-ico"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><use href="#i-trend"/></svg></span>貯蓄・資産形成</div>
+      <span class="sb-hd-arrow open">▲</span>
+    </div>
+    <div class="sb-body open">
+      <div class="f-group">
+        <!-- 現在の貯蓄 -->
+        <div class="f2">
+          <div class="f"><label>現在の貯蓄</label><div class="iw"><input id="curSav" type="number" value="300" oninput="simulate()"><span class="u">万</span></div></div>
+          <div class="f"><label>利率</label><div class="iw"><input id="savRate" type="number" value="0.02" step=".01" oninput="simulate()"><span class="u">%</span></div></div>
+        </div>
+        <!-- 毎年の貯蓄（固定額） -->
+        <div class="f2" style="margin-top:4px">
+          <div class="f"><label>毎年の貯蓄</label><div class="iw"><input id="yearSav" type="number" value="" placeholder="—" oninput="simulate()"><span class="u">万/年</span></div></div>
+          <div class="f"><label>利率</label><div class="iw"><input id="yearSavRate" type="number" value="" placeholder="—" step=".1" oninput="simulate()"><span class="u">%</span></div></div>
+        </div>
+        <!-- 収支黒字額の○% -->
+        <div style="display:flex;align-items:center;gap:4px;margin-top:6px">
+          <input type="checkbox" id="chkSurplusPct" onchange="simulate()" style="accent-color:#fff;flex-shrink:0">
+          <label for="chkSurplusPct" style="font-size:9px;color:rgba(255,255,255,.8);cursor:pointer;flex:1">収支黒字額の</label>
+          <div class="iw" style="width:40px"><input id="surplusPct" type="number" value="100" min="0" max="100" oninput="simulate()"></div>
+          <span style="font-size:9px;color:rgba(255,255,255,.7)">%</span>
+          <div class="iw" style="width:40px"><input id="surplusPctRate" type="number" value="" placeholder="—" step=".1" oninput="simulate()"></div>
+          <span style="font-size:9px;color:rgba(255,255,255,.7)">%</span>
+        </div>
+        <!-- 年間収入額の○% -->
+        <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+          <input type="checkbox" id="chkIncomePct" onchange="simulate()" style="accent-color:#fff;flex-shrink:0">
+          <label for="chkIncomePct" style="font-size:9px;color:rgba(255,255,255,.8);cursor:pointer;flex:1">年間収入額の</label>
+          <div class="iw" style="width:40px"><input id="incomePct" type="number" value="15" min="0" max="100" oninput="simulate()"></div>
+          <span style="font-size:9px;color:rgba(255,255,255,.7)">%</span>
+          <div class="iw" style="width:40px"><input id="incomePctRate" type="number" value="" placeholder="—" step=".1" oninput="simulate()"></div>
+          <span style="font-size:9px;color:rgba(255,255,255,.7)">%</span>
+        </div>
+        <div class="sec-div">積立プラン（複利運用）</div>
+        <div class="f"><label>月々の積立額</label><div class="iw"><input id="invMonthly" type="number" value="3" step=".5" oninput="simulate()"><span class="u">万/月</span></div></div>
+        <div class="f2">
+          <div class="f"><label>年利</label><div class="iw"><input id="invRate" type="number" value="4" step=".5" oninput="simulate()"><span class="u">%</span></div></div>
+          <div class="f"><label>開始</label><div class="iw"><input id="invFrom" type="number" value="30" oninput="simulate()"><span class="u">歳</span></div></div>
+        </div>
+        <div class="f"><label>終了年齢</label><div class="iw"><input id="invTo" type="number" value="65" oninput="simulate()"><span class="u">歳</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="run-btn" onclick="simulate()">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><use href="#i-play"/></svg>
+    シミュレーション実行
+  </button>
+
+  </div><!-- /sb-scroll -->
+</div><!-- /sidebar -->
+
+<!-- RESIZER -->
+<div id="resizer"></div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- サマリカード -->
+  <div id="summary" style="display:none">
+    <div class="scard"><div class="scard-lbl">最終資産（98歳）</div><div class="scard-val" id="sc-asset">—</div><div class="scard-sub" id="sc-age">—</div></div>
+    <div class="scard"><div class="scard-lbl">積立運用残高</div><div class="scard-val blue" id="sc-inv">—</div><div class="scard-sub" id="sc-inv-sub">—</div></div>
+    <div class="scard"><div class="scard-lbl">ピーク資産</div><div class="scard-val amber" id="sc-peak">—</div><div class="scard-sub" id="sc-peakage">—</div></div>
+    <div class="scard"><div class="scard-lbl">赤字年数</div><div class="scard-val" id="sc-deficit">—</div><div class="scard-sub" id="sc-deficitlbl">—</div></div>
+    <div class="scard"><div class="scard-lbl">緊急予備資金達成</div><div class="scard-val" id="sc-emergency">—</div><div class="scard-sub" id="sc-emergency-sub">生活費6ヶ月分</div></div>
+  </div>
+
+  <!-- グラフビュー -->
+  <div id="graphView">
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;flex-direction:column;gap:8px">
+      <svg width="40" height="40" viewBox="0 0 16 16" fill="none" stroke="#ccc" stroke-width="1"><use href="#i-bar"/></svg>
+      左の項目を入力して「シミュレーション実行」を押してください
+    </div>
+  </div>
+
+  <!-- シートビュー -->
+  <div id="sheetView"></div>
+</div>
+
+</div><!-- /app -->
+
+<!-- FOOTER削除済み -->
+
+<script>
+'use strict';
+
+/* ════════════════════════════════
+   CONSTANTS
+════════════════════════════════ */
+const C = {
+  living:   '#8b7cc4',
+  utility:  '#2970c4',
+  ins:      '#d97a28',
+  social:   '#2a9e6e',
+  housing:  '#d4b800',
+  edu:      '#d94848',
+  dream:    '#e888a8',
+  income:   '#00b4d8',
+  invest:   '#3d8cde',
+};
+
+/* ════════════════════════════════
+   STATE
+════════════════════════════════ */
+let simData = null;
+let view = 'graph';
+let ch1 = null, ch2 = null;
+
+/* ════════════════════════════════
+   HELPERS
+════════════════════════════════ */
+const $  = id => document.getElementById(id);
+const vn = id => parseFloat($( id)?.value) || 0;
+const vs = id => $( id)?.value || '';
+const fmtM = n => Math.round(n).toLocaleString();
+const fmtK = n => {
+  const r = Math.round(Math.abs(n));
+  const s = n < 0 ? '-' : '';
+  return r >= 10000 ? s + (r/10000).toFixed(1) + '億円' : s + r.toLocaleString() + '万円';
+};
+
+/* ════════════════════════════════
+   UI HELPERS
+════════════════════════════════ */
+function toggleSB(hd){
+  const body = hd.nextElementSibling;
+  const arr  = hd.querySelector('.sb-hd-arrow');
+  body.classList.toggle('open');
+  arr.classList.toggle('open');
+}
+function switchView(v){
+  view = v;
+  $('vbG').className = v==='graph' ? 'vbtn active' : 'vbtn';
+  $('vbS').className = v==='sheet' ? 'vbtn active' : 'vbtn';
+  $('graphView').style.display = v==='graph' ? 'flex' : 'none';
+  $('sheetView').style.display = v==='sheet' ? 'block' : 'none';
+  if(v==='graph' && ch1) { ch1.resize(); ch2?.resize(); }
+}
+
+/* ════════════════════════════════
+   手取り試算モーダル
+════════════════════════════════ */
+function calcTakeHomeModal(){
+  // 既存モーダルがあれば閉じる
+  const existing = $('takeHomeModal');
+  if(existing){ existing.remove(); return; }
+
+  const modal = document.createElement('div');
+  modal.id = 'takeHomeModal';
+  modal.style.cssText = `
+    position:fixed;top:56px;right:8px;z-index:500;
+    background:#fff;border-radius:10px;padding:16px 18px;
+    box-shadow:0 4px 24px rgba(0,0,0,.18);border:1px solid #dde;
+    width:240px;font-family:'Noto Sans JP',sans-serif;font-size:12px;
+  `;
+  modal.innerHTML = `
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:#1a1e26">手取り年収 試算</div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:10px;color:#888;display:block;margin-bottom:3px">額面年収（万円）</label>
+      <input id="thGross" type="number" value="500" style="width:100%;padding:5px 8px;border:1px solid #dde;border-radius:5px;font-size:13px;font-family:inherit;outline:none">
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:10px;color:#888;display:block;margin-bottom:3px">社保</label>
+      <select id="thType" style="width:100%;padding:5px;border:1px solid #dde;border-radius:5px;font-size:12px;font-family:inherit;outline:none">
+        <option value="kosei">厚生年金（会社員）</option>
+        <option value="national">国民年金（自営業）</option>
+      </select>
+    </div>
+    <div id="thResult" style="background:#f0f6ff;border-radius:6px;padding:10px;font-size:11px;line-height:1.7;color:#333"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="calcTH()" style="flex:1;padding:6px;background:#0a6ebd;color:#fff;border:none;border-radius:5px;font-family:inherit;font-size:12px;cursor:pointer">計算</button>
+      <button onclick="applyTH()" style="flex:1;padding:6px;background:#1e8a4a;color:#fff;border:none;border-radius:5px;font-family:inherit;font-size:12px;cursor:pointer">入力欄に反映</button>
+    </div>
+    <button onclick="$('takeHomeModal').remove()" style="position:absolute;top:10px;right:12px;background:none;border:none;font-size:16px;cursor:pointer;color:#999;line-height:1">×</button>
+  `;
+  document.body.appendChild(modal);
+  calcTH();
+}
+
+function calcTH(){
+  const gross = parseFloat($('thGross')?.value) || 0;
+  const type = $('thType')?.value || 'kosei';
+  const res = $('thResult'); if(!res) return;
+
+  // 概算計算
+  const kenpo  = type==='kosei' ? gross * 0.05 : 0;       // 健康保険 約5%
+  const kousei = type==='kosei' ? gross * 0.0915 : 0;     // 厚生年金 約9.15%
+  const kokumin= type==='national' ? 20.4 : 0;            // 国民年金 固定額（万）
+  const koyo   = type==='kosei' ? gross * 0.006 : 0;      // 雇用保険
+  const socialTotal = kenpo + kousei + kokumin + koyo;
+
+  // 所得税・住民税（概算）
+  const taxable = Math.max(0, gross - socialTotal - 55); // 給与所得控除概算55万
+  let incomeTax = 0;
+  if(taxable > 330)      incomeTax = (taxable-330)*0.2 + 330*0.1;
+  else if(taxable > 195) incomeTax = (taxable-195)*0.1 + 195*0.05;
+  else if(taxable > 0)   incomeTax = taxable * 0.05;
+  const juminTax = taxable * 0.1;
+  const netIncome = gross - socialTotal - incomeTax - juminTax;
+
+  res.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr auto;gap:2px">
+      <span style="color:#666">社会保険料</span><span style="font-weight:500">−${Math.round(socialTotal)}万</span>
+      <span style="color:#666">所得税（概算）</span><span style="font-weight:500">−${Math.round(incomeTax)}万</span>
+      <span style="color:#666">住民税（概算）</span><span style="font-weight:500">−${Math.round(juminTax)}万</span>
+      <div style="grid-column:1/-1;border-top:1px solid #dde;margin:4px 0"></div>
+      <span style="font-weight:600;color:#0a6ebd;font-size:13px">手取り年収</span>
+      <span style="font-weight:700;color:#0a6ebd;font-size:13px">${Math.round(netIncome)}万円</span>
+    </div>
+  `;
+  modal_netIncome = Math.round(netIncome);
+}
+let modal_netIncome = 0;
+
+function applyTH(){
+  if(!modal_netIncome) return;
+  const el = $('myIncome'); if(!el) return;
+  el.value = modal_netIncome;
+  $('takeHomeModal')?.remove();
+  simulate();
+}
+
+/* ════════════════════════════════
+   SIMULATION
+════════════════════════════════ */
+// 年金月額試算
+// 厚生年金：標準報酬月額 × 5.481/1000 × 加入月数（概算）
+// 国民年金：満額約6.8万（40年加入）
+function pensionMon(type, annualIncome, workYears){
+  if(type === 'kosei'){
+    const monthlyStd = Math.min(annualIncome / 12, 65); // 上限65万
+    const months = Math.min((workYears||35), 40) * 12;
+    const kosei = monthlyStd * 5.481 / 1000 * months;
+    const kokumin = 6.8 * Math.min((workYears||35), 40) / 40;
+    return Math.round((kosei + kokumin) * 10) / 10;
+  }
+  // 国民年金のみ（加入年数で按分）
+  return Math.round(6.8 * Math.min((workYears||35), 40) / 40 * 10) / 10;
+}
+
+// 年金参考値をサイドバーに表示
+function updatePensionHint(annualIncome, workYears, pensionType){
+  const el = $('pensionHint');
+  if(!el) return;
+  const mon = pensionMon(pensionType, annualIncome, workYears);
+  el.textContent = `参考: 約${mon.toFixed(1)}万/月`;
+}
+
+function simulate(){
+  // 年齢はselectのvalue（プルダウン）
+  const myAge  = parseInt($('myAge')?.value) || 30;
+  const spAge  = parseInt($('spAge')?.value) || 28;
+
+  const getCA = id => { const el=$(id); if(!el) return null; const v=parseInt(el.value); return isNaN(v)?null:v; };
+  const c1Age = getCA('c1Age');
+  const c2Age = getCA('c2Age');
+  const c3Age = getCA('c3Age');
+
+  const myInc = vn('myIncome');
+  const myWorkFrom = Math.round(vn('myWorkFrom'));
+  const myWorkTo   = Math.round(vn('myWorkTo'));
+  const spInc      = vn('spIncome');
+  const myPenAge   = Math.round(vn('myPensionAge'));
+  const spPenAge   = Math.round(vn('spPensionAge'));
+  const myPenMon   = pensionMon(vs('myPension'), myInc, myWorkTo - myWorkFrom);
+  const spPenMon   = pensionMon(vs('spPension'), spInc, 40);
+  const myRetire   = vn('myRetire');
+
+  // インフレ率
+  const inflation = vn('inflationRate') / 100;
+
+  // 生活費/年（livingItemsから）
+  const food_v    = livingItems.find(i=>i.id==='food')?.val||0;
+  const water_v   = livingItems.find(i=>i.id==='water')?.val||0;
+  const elec_v    = livingItems.find(i=>i.id==='electric')?.val||0;
+  const comm_v    = livingItems.find(i=>i.id==='comm')?.val||0;
+  const daily_v   = livingItems.find(i=>i.id==='daily')?.val||0;
+  const entmt_v   = livingItems.find(i=>i.id==='entmt')?.val||0;
+  const clothes_v = livingItems.find(i=>i.id==='clothes')?.val||0;
+  const social_v  = livingItems.find(i=>i.id==='social')?.val||0;
+  const gas_v     = livingItems.find(i=>i.id==='gasoline')?.val||0;
+  const other_v   = livingItems.find(i=>i.id==='otherliv')?.val||0;
+  const livingBase = (food_v+daily_v+clothes_v+social_v+other_v+entmt_v+gas_v)*12;
+  const utilBase   = (water_v+elec_v+comm_v)*12;
+  const retRatio   = vn('retRatio')/100;
+  const insAnnBase = vn('insMonthly')*12;
+
+  // 住宅
+  const rentAnn  = vn('rent')*12;
+  const rentFrom = Math.round(vn('rentFrom')||0);
+  const rentTo   = Math.round(vn('rentTo')||99);
+  const buyAge   = $('buyAge').value ? Math.round(vn('buyAge')) : null;
+  const loanYrs  = Math.round(vn('loanPeriod')||0);
+  const buyPrice = vn('buyPrice')||0;
+  const lr       = vn('loanRate')/100;
+
+  let loanMon = 0;
+  if(buyAge && buyPrice>0 && loanYrs>0){
+    const rm = lr/12, n = loanYrs*12;
+    loanMon = rm>0 ? buyPrice*rm*Math.pow(1+rm,n)/(Math.pow(1+rm,n)-1) : buyPrice/n;
+  }
+
+  // 夢購入（本家：自動車×2 + その他）
+  const dreamItems = [
+    { price: vn('car1Price'),   cycle: Math.round(vn('car1Cycle')||5),  from: Math.round(vn('car1From')||30), to: Math.round(vn('car1To')||75)  },
+    { price: vn('car2Price'),   cycle: Math.round(vn('car2Cycle')||7),  from: Math.round(vn('car2From')||30), to: Math.round(vn('car2To')||75)  },
+    { price: vn('dream3Price'), cycle: Math.round(vn('dream3Cycle')||5),from: Math.round(vn('dream3From')||30),to: Math.round(vn('dream3To')||75)},
+  ];
+
+  // 積立
+  const curSav  = vn('curSav');
+  const savR    = vn('savRate')/100;
+  const invMon  = vn('invMonthly')*12;
+  const invR    = vn('invRate')/100;
+  const invFrom = Math.round(vn('invFrom'));
+  const invTo   = Math.round(vn('invTo'));
+
+  // 緊急予備資金の目安（生活費6ヶ月分）
+  const emergencyTarget = (livingBase + utilBase) / 12 * 6;
+
+  // 教育費 eduCfg は上で定義済み
+  const rows = [];
+  let sav = curSav, inv = 0;
+  const END = 98;
+
+  for(let age=myAge; age<=END; age++){
+    const yr = age - myAge;
+    const retired = age >= myWorkTo;
+    const spCur = spAge + yr;
+    // インフレ係数（毎年複利で生活費上昇）
+    const inflFactor = Math.pow(1 + inflation, yr);
+
+    // 収入
+    let mi = 0;
+    if(age >= myWorkFrom && age < myWorkTo) mi = myInc;
+    if(age >= myPenAge) mi += myPenMon*12;
+    if(age === myWorkTo && myRetire>0) mi += myRetire;
+    let si = spInc > 0 ? spInc : 0;
+    if(spCur >= spPenAge) si = Math.max(si, spPenMon*12);
+    const totalInc = mi + si;
+
+    // 支出（インフレ反映）
+    const ratio  = retired ? retRatio : 1;
+    const living = livingBase * ratio * inflFactor;
+    const utility= utilBase   * ratio * inflFactor;
+    const ins    = retired ? 0 : insAnnBase;
+    const socTax = retired ? 0 : Math.max(0, totalInc*0.025);
+
+    let housing = 0;
+    if(buyAge && age >= buyAge && loanYrs>0 && age < buyAge+loanYrs){
+      housing = loanMon*12;
+    } else if(!buyAge || age < buyAge){
+      if(age >= rentFrom && age <= rentTo) housing = rentAnn * inflFactor;
+    }
+
+    // 教育費（eduDataから計算）
+    const edu = calcEduForAge(yr);
+
+    let dream = 0;
+    for(const di of dreamItems){
+      if(di.price>0 && di.cycle>0 && age>=di.from && age<=di.to && (age-di.from)%di.cycle===0)
+        dream += di.price;
+    }
+
+    // 追加貯蓄（毎年固定・収支黒字割合・収入割合）
+    const yearSavAmt  = vn('yearSav') || 0;
+    const surplusChk  = $('chkSurplusPct')?.checked;
+    const incomeChk   = $('chkIncomePct')?.checked;
+
+    let invAnn = 0;
+    if(age>=invFrom && age<invTo && !retired) invAnn = invMon;
+
+    const totalExp = living + utility + ins + socTax + housing + edu + dream + invAnn;
+    const surplus  = totalInc - totalExp;
+
+    // 追加貯蓄の計算（surplus確定後）
+    let extraSav = yearSavAmt;
+    if(surplusChk && surplus>0) extraSav += surplus * (vn('surplusPct')/100);
+    if(incomeChk)  extraSav += totalInc * (vn('incomePct')/100);
+
+    sav = sav*(1+savR) + surplus - invAnn + extraSav;
+    if(age >= invFrom) inv = (inv + invAnn)*(1+invR);
+    const total = sav + inv;
+
+    rows.push({
+      age, yr, spAge:spCur,
+      c1Age: c1Age!==null ? c1Age+yr : null,
+      c2Age: c2Age!==null ? c2Age+yr : null,
+      c3Age: c3Age!==null ? c3Age+yr : null,
+      income:Math.round(totalInc), myInc:Math.round(mi), spInc:Math.round(si),
+      living:Math.round(living), utility:Math.round(utility),
+      ins:Math.round(ins), social:Math.round(socTax),
+      housing:Math.round(housing), edu:Math.round(edu),
+      dream:Math.round(dream), invest:Math.round(invAnn),
+      expense:Math.round(totalExp - dream - invAnn),
+      surplus:Math.round(surplus),
+      savings:Math.round(sav), investAsset:Math.round(inv),
+      total:Math.round(total),
+      retired,
+      emergencyTarget: Math.round(emergencyTarget),
+    });
+  }
+
+  simData = rows;
+  // 年金参考値をサイドバーに表示
+  updatePensionHint(myInc, myWorkTo - myWorkFrom, vs('myPension'));
+  render();
+}
+/* ════════════════════════════════
+   RENDER DISPATCH
+════════════════════════════════ */
+function render(){
+  if(!simData) return;
+  updateSummary();
+  if(view==='graph') renderGraph();
+  else renderSheet();
+}
+
+/* ════════════════════════════════
+   SUMMARY CARDS
+════════════════════════════════ */
+function updateSummary(){
+  const rows = simData;
+  const last = rows[rows.length-1];
+  const deficit = rows.filter(r=>r.surplus<0).length;
+  const peak = rows.reduce((p,r)=>r.total>p.total?r:p, rows[0]);
+  const totalInvested = rows.reduce((s,r)=>s+r.invest, 0);
+  const investReturn = last.investAsset - totalInvested;
+
+  $('summary').style.display = 'grid';
+
+  const el = $('sc-asset');
+  el.textContent = fmtK(last.total);
+  el.className = 'scard-val ' + (last.total>=0?'green':'red');
+  $('sc-age').textContent = last.age+'歳時点';
+
+  $('sc-inv').textContent = fmtK(last.investAsset);
+  $('sc-inv-sub').textContent = '運用益 '+fmtK(Math.max(0,investReturn));
+
+  $('sc-peak').textContent = fmtK(peak.total);
+  $('sc-peakage').textContent = peak.age+'歳時点';
+
+  const dEl = $('sc-deficit');
+  dEl.textContent = deficit + '年';
+  dEl.className = 'scard-val ' + (deficit>0?'red':'green');
+  $('sc-deficitlbl').textContent = deficit>0 ? 'マイナス期間あり' : '全期間黒字';
+
+  // 緊急予備資金達成年齢
+  const target = rows[0]?.emergencyTarget || 0;
+  const emergRow = rows.find(r => r.savings >= target);
+  const emEl = $('sc-emergency');
+  if(emergRow){
+    emEl.textContent = emergRow.age+'歳';
+    emEl.className = 'scard-val green';
+    $('sc-emergency-sub').textContent = `目標 ${fmtK(target)}（達成済）`;
+  } else {
+    emEl.textContent = '未達成';
+    emEl.className = 'scard-val red';
+    $('sc-emergency-sub').textContent = `目標 ${fmtK(target)}`;
+  }
+}
+
+/* ════════════════════════════════
+   GRAPH VIEW
+════════════════════════════════ */
+function renderGraph(){
+  const rows = simData;
+  const gv = $('graphView');
+  gv.style.display = 'flex';
+  $('sheetView').style.display = 'none';
+
+  gv.innerHTML = `
+    <!-- 収支グラフ -->
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div class="chart-hd-title">年間収支（万円）</div>
+        <div class="legend">
+          <span class="leg"><span class="leg-sq" style="background:${C.living}"></span>生活費</span>
+          <span class="leg"><span class="leg-sq" style="background:${C.utility}"></span>光熱・通信</span>
+          <span class="leg"><span class="leg-sq" style="background:${C.ins}"></span>保険料</span>
+          <span class="leg"><span class="leg-sq" style="background:${C.social}"></span>社保税</span>
+          <span class="leg"><span class="leg-sq" style="background:${C.housing}"></span>住居費</span>
+          <span class="leg"><span class="leg-sq" style="background:${C.edu}"></span>教育費</span>
+          <span class="leg"><span class="leg-sq" style="background:${C.dream}"></span>夢購入</span>
+          <span class="leg"><span class="leg-line" style="border-color:${C.income}"></span>収入</span>
+        </div>
+      </div>
+      <div class="cw h240"><canvas id="chInc" role="img" aria-label="年間収支グラフ"></canvas></div>
+    </div>
+
+    <!-- 資産推移グラフ -->
+    <div class="chart-card">
+      <div class="chart-hd">
+        <div class="chart-hd-title">資産推移（万円）</div>
+        <div class="legend" id="assetLegend"></div>
+      </div>
+      <div class="cw h200"><canvas id="chAsset" role="img" aria-label="資産推移グラフ"></canvas></div>
+    </div>
+
+    <!-- ライフイベントライン -->
+    <div class="chart-card" style="padding:10px 14px">
+      <div class="chart-hd-title" style="margin-bottom:8px">ライフイベント</div>
+      <div id="evtLine"></div>
+    </div>
+  `;
+
+  const labels = rows.map(r=>r.age+'歳');
+
+  // 収支グラフ
+  if(ch1){ ch1.destroy(); }
+  ch1 = new Chart($('chInc'),{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'生活費',   data:rows.map(r=>r.living),   backgroundColor:C.living,   stack:'e'},
+        {label:'光熱・通信',data:rows.map(r=>r.utility),  backgroundColor:C.utility,  stack:'e'},
+        {label:'保険料',   data:rows.map(r=>r.ins),       backgroundColor:C.ins,      stack:'e'},
+        {label:'社保税',   data:rows.map(r=>r.social),    backgroundColor:C.social,   stack:'e'},
+        {label:'住居費',   data:rows.map(r=>r.housing),   backgroundColor:C.housing,  stack:'e'},
+        {label:'教育費',   data:rows.map(r=>r.edu),       backgroundColor:C.edu,      stack:'e'},
+        {label:'夢購入',   data:rows.map(r=>r.dream),     backgroundColor:C.dream,    stack:'e'},
+        {type:'line',label:'収入',data:rows.map(r=>r.income),
+         borderColor:C.income,backgroundColor:'transparent',
+         pointRadius:1.5,tension:0.3,borderWidth:2,yAxisID:'y'},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:400},
+      plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,
+        callbacks:{label:c=>' '+c.dataset.label+': '+Math.round(c.raw).toLocaleString()+'万円'}}},
+      scales:{
+        x:{ticks:{font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:20},
+           grid:{color:'rgba(0,0,0,.04)'}},
+        y:{stacked:true,ticks:{font:{size:9},callback:v=>v.toLocaleString()},
+           grid:{color:'rgba(0,0,0,.06)'}},
+      }
+    }
+  });
+
+  buildAssetChart();
+  buildEventLine();
+}
+
+function buildAssetChart(){
+  const rows = simData;
+  if(!rows) return;
+  const labels = rows.map(r=>r.age+'歳');
+
+  const savData = rows.map(r=>r.savings);
+  const invData = rows.map(r=>r.investAsset);
+  const totData = rows.map(r=>r.total);
+  const emergTarget = rows[0]?.emergencyTarget || 0;
+
+  if(ch2){ ch2.destroy(); }
+  ch2 = new Chart($('chAsset'),{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'積立資産',data:invData,backgroundColor:'rgba(74,143,216,.7)',stack:'a'},
+        {label:'現金貯蓄(+)',data:savData.map(v=>Math.max(0,v)),backgroundColor:'rgba(106,176,76,.65)',stack:'a'},
+        {label:'現金貯蓄(-)',data:savData.map(v=>Math.min(0,v)),backgroundColor:'rgba(224,80,80,.65)',stack:'a'},
+        {type:'line',label:'純資産合計',data:totData,
+         borderColor:'rgba(40,40,40,.55)',backgroundColor:'transparent',
+         borderDash:[4,3],pointRadius:1.5,tension:0.3,borderWidth:1.5},
+        {type:'line',label:`緊急予備資金ライン(${Math.round(emergTarget)}万)`,
+         data:rows.map(()=>emergTarget),
+         borderColor:'rgba(220,80,80,.5)',backgroundColor:'transparent',
+         borderDash:[6,4],pointRadius:0,borderWidth:1.2},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:{duration:300},
+      plugins:{
+        legend:{display:false},
+        tooltip:{mode:'index',intersect:false,
+          callbacks:{label:c=>' '+c.dataset.label+': '+Math.round(c.raw).toLocaleString()+'万円'}}
+      },
+      scales:{
+        x:{ticks:{font:{size:9},maxRotation:45,autoSkip:true,maxTicksLimit:20},
+           grid:{color:'rgba(0,0,0,.04)'}},
+        y:{stacked:true,ticks:{font:{size:9},callback:v=>v.toLocaleString()},
+           grid:{color:'rgba(0,0,0,.06)'}},
+      }
+    }
+  });
+
+  // 凡例を手動で更新
+  const legEl = $('assetLegend');
+  if(legEl) legEl.innerHTML = `
+    <span class="leg"><span class="leg-sq" style="background:rgba(74,143,216,.7)"></span>積立資産</span>
+    <span class="leg"><span class="leg-sq" style="background:rgba(106,176,76,.65)"></span>現金貯蓄</span>
+    <span class="leg"><span class="leg-sq" style="background:rgba(224,80,80,.65)"></span>貯蓄マイナス</span>
+    <span class="leg"><span class="leg-line" style="border-color:rgba(40,40,40,.55);border-style:dashed"></span>純資産</span>
+    <span class="leg"><span class="leg-line" style="border-color:rgba(220,80,80,.5);border-style:dashed"></span>緊急予備資金目標</span>
+  `;
+}
+
+/* ライフイベントライン */
+function buildEventLine(){
+  const rows = simData;
+  if(!rows || !rows.length) return;
+  const el = $('evtLine');
+  if(!el) return;
+
+  const events = [];
+  const myAge0 = rows[0].age;
+  const END = rows[rows.length-1].age;
+  const SPAN = END - myAge0;
+
+  rows.forEach(r=>{
+    if(r.retired && rows[r.yr-1] && !rows[r.yr-1].retired)
+      events.push({age:r.age, label:'退職', color:'#e07020'});
+    if(r.edu > 0 && (r.yr===0 || rows[r.yr-1].edu===0))
+      events.push({age:r.age, label:'教育費開始', color:'#d94848'});
+    if(r.dream > 0)
+      events.push({age:r.age, label:'車購入', color:'#888'});
+    if(r.housing>0 && r.housing !== (rows[r.yr-1]?.housing??0) && r.housing>100)
+      events.push({age:r.age, label:'住宅購入', color:'#c4a000'});
+  });
+  // 年金開始
+  const penRow = rows.find(r=>r.retired && r.income>0 && r.income<rows[0].income);
+  if(penRow) events.push({age:penRow.age, label:'年金開始', color:'#1a8a4a'});
+
+  const W = el.parentElement.offsetWidth - 28;
+  const pct = age => ((age-myAge0)/SPAN*100).toFixed(1)+'%';
+
+  // 背景レール
+  el.innerHTML = `
+    <div style="position:relative;height:44px;border-top:1px solid #e0e6f0;margin-top:4px">
+      <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,#c8d8ec,#c8d8ec)"></div>
+      ${rows.filter((_,i)=>i%5===0).map(r=>`
+        <div style="position:absolute;left:${pct(r.age)};top:-3px;transform:translateX(-50%)">
+          <div style="width:1px;height:8px;background:#dde4ef;margin:0 auto"></div>
+          <div style="font-size:8px;color:#aab;margin-top:1px;transform:translateX(-50%);white-space:nowrap">${r.age}歳</div>
+        </div>`).join('')}
+      ${events.map(e=>`
+        <div style="position:absolute;left:${pct(e.age)};top:-16px;transform:translateX(-50%);text-align:center">
+          <div style="font-size:8px;color:${e.color};white-space:nowrap;font-weight:500">${e.label}</div>
+          <div style="width:2px;height:18px;background:${e.color};opacity:.6;margin:2px auto 0"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:${e.color};margin:0 auto"></div>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ════════════════════════════════
+   SHEET VIEW
+════════════════════════════════ */
+function renderSheet(){
+  $('graphView').style.display = 'none';
+  const sv = $('sheetView');
+  sv.style.display = 'block';
+
+  const rows = simData;
+  const myN = vs('myName')||'本人';
+  const spN = vs('spName')||'配偶者';
+  const c1N = vs('c1Name')||null;
+  const c2N = vs('c2Name')||null;
+  const c3N = vs('c3Name')||null;
+
+  // セルビルダー
+  const cell = (v, extra='') =>
+    `<td data-col ${extra}>${v===0?'<span style="color:#ccc">0</span>':fmtM(v)}</td>`;
+  const cellC = (v, cls, extra='') =>
+    `<td data-col class="${cls}" ${extra}>${v===0?'<span style="color:#ccc">0</span>':fmtM(v)}</td>`;
+
+  // 行ビルダー群
+  const makeRow = (lbl, fn, opts={}) => {
+    const {neg=false, bold=false, color='', rowCls=''} = opts;
+    const lStyle = color ? `style="color:${color}"` : '';
+    let cells = `<td class="rh" ${lStyle}>${lbl}</td>`;
+    rows.forEach((r,i)=>{
+      const v = fn(r);
+      const c = neg&&v<0 ? 'neg' : '';
+      const sty = bold ? 'style="font-weight:600"' : '';
+      cells += `<td data-col="${i}" class="${c}" ${sty}>${v===0?'<span style="color:#ccc">0</span>':fmtM(v)}</td>`;
+    });
+    return `<tr class="${rowCls}">${cells}</tr>`;
+  };
+
+  const secRow = lbl =>
+    `<tr class="sec-r"><td class="rh">${lbl}</td>${rows.map((_,i)=>`<td data-col="${i}"></td>`).join('')}</tr>`;
+
+  const ageRow = (lbl, fn, opts={}) => {
+    const {color='#1565c0', rowBg=''} = opts;
+    const rs = rowBg ? `style="background:${rowBg}"` : '';
+    const lStyle = `style="color:${color};font-weight:${rowBg?'700':'500'}"`;
+    let cells = `<td class="rh" ${lStyle}>${lbl}</td>`;
+    rows.forEach((r,i)=>{
+      const v = fn(r);
+      const sty = rowBg ? `style="color:${color};font-weight:600"` : `style="color:#555"`;
+      cells += `<td data-col="${i}" ${sty}>${(v!==null&&v!==undefined)?v:''}</td>`;
+    });
+    return `<tr ${rs}>${cells}</tr>`;
+  };
+
+  const totRow = (lbl, fn, opts={}) => {
+    const {neg=true, cls='tot-r', lColor='', bluVal=false} = opts;
+    const lStyle = lColor ? `style="color:${lColor};font-weight:700"` : '';
+    let cells = `<td class="rh" ${lStyle}>${lbl}</td>`;
+    rows.forEach((r,i)=>{
+      const v = fn(r);
+      const c = bluVal ? 'blu' : (neg&&v<0 ? 'neg' : '');
+      cells += `<td data-col="${i}" class="${c}" style="font-weight:700">${v===0?'<span style="color:#ccc">0</span>':fmtM(v)}</td>`;
+    });
+    return `<tr class="${cls}">${cells}</tr>`;
+  };
+
+  // 「夢購入」は該当年のみ値表示
+  const dreamRow = () => {
+    let cells = `<td class="rh">夢購入</td>`;
+    rows.forEach((r,i)=>{
+      cells += r.dream>0
+        ? `<td data-col="${i}" style="color:#c06000;font-weight:500">${fmtM(r.dream)}</td>`
+        : `<td data-col="${i}"><span style="color:#ccc">0</span></td>`;
+    });
+    return `<tr>${cells}</tr>`;
+  };
+
+  sv.innerHTML = `<table class="sh">
+    <thead>
+      <tr>
+        <th class="rh" style="min-width:72px">経過年数</th>
+        ${rows.map((_,i)=>`<th data-col="${i}" style="min-width:44px">${i}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      <!-- 年齢ブロック（背景付き） -->
+      ${ageRow('年齢（本人）', r=>r.age,   {color:'#02305a', rowBg:'#bed8ee'})}
+      ${ageRow(myN+'様',       r=>r.age,   {color:'#1565c0'})}
+      ${ageRow(spN+'様',       r=>r.spAge, {color:'#1565c0'})}
+      ${c1N ? ageRow(c1N+'様', r=>r.c1Age!==null&&r.c1Age>=0?r.c1Age:null, {color:'#2e7d32'}) : ''}
+      ${c2N ? ageRow(c2N+'様', r=>r.c2Age!==null&&r.c2Age>=0?r.c2Age:null, {color:'#2e7d32'}) : ''}
+      ${c3N ? ageRow(c3N+'様', r=>r.c3Age!==null&&r.c3Age>=0?r.c3Age:null, {color:'#2e7d32'}) : ''}
+
+      <!-- 収入ブロック -->
+      ${secRow('収入')}
+      ${makeRow(myN,   r=>r.myInc)}
+      ${makeRow(spN,   r=>r.spInc)}
+      ${makeRow('保険等', _=>0)}
+      ${totRow('計', r=>r.income, {neg:false})}
+
+      <!-- 支出ブロック -->
+      ${secRow('支出')}
+      ${makeRow('住居費',   r=>r.housing)}
+      ${makeRow('生活費',   r=>r.living,  {color:'#6a2ea0'})}
+      ${makeRow('水光費',   r=>r.utility, {color:'#1a5fa0'})}
+      ${makeRow('その他',   _=>0)}
+      ${makeRow('保険料',   r=>r.ins,     {color:'#a04020'})}
+      ${makeRow('教育費',   r=>r.edu,     {color:'#a02020'})}
+      ${makeRow('社保税',   r=>r.social,  {color:'#1a7a50'})}
+      ${totRow('計', r=>r.expense, {neg:false})}
+
+      <!-- 収支 -->
+      ${totRow('収支', r=>r.surplus, {neg:true, cls:'tot-r'})}
+
+      <!-- 貯蓄・資産 -->
+      ${totRow('預貯金', r=>r.savings, {neg:true, cls:'tot-r'})}
+      ${totRow('積立資産', r=>r.investAsset, {neg:false, cls:'tot-r', lColor:'#1050a0', bluVal:true})}
+      ${dreamRow()}
+      ${totRow('貯蓄残高', r=>r.savings, {neg:true, cls:'tot-r', lColor:'#1050a0', bluVal:false})}
+
+      <!-- 総資産（黄色背景） -->
+      <tr class="asset-r">
+        <td class="rh">総資産</td>
+        ${rows.map((r,i)=>`<td data-col="${i}" style="color:${r.total<0?'#b52020':'#4a3500'};font-weight:700">${fmtM(r.total)}</td>`).join('')}
+      </tr>
+    </tbody>
+  </table>`;
+
+  // ホバーロジック：列ハイライト（薄青）のみJSで制御
+  // セル自体の黄色はCSS :hover で処理するため、JSは列・ヘッダーのみ担当
+  const tbl = sv.querySelector('table.sh');
+  let lastCol = -1;
+
+  tbl.addEventListener('mouseover', e=>{
+    const td = e.target.closest('td,th');
+    if(!td) return;
+    const ci = td.dataset.col;
+    if(ci === undefined) return;
+    const c = parseInt(ci);
+    if(c === lastCol) return;
+    // 前の列ハイライト解除
+    tbl.querySelectorAll('.col-hl,.col-hd-hl').forEach(el=>{
+      el.classList.remove('col-hl','col-hd-hl');
+    });
+    lastCol = c;
+    // 同じ列を薄青ハイライト
+    tbl.querySelectorAll(`[data-col="${c}"]`).forEach(el=>{
+      if(el.tagName==='TH') el.classList.add('col-hd-hl');
+      else el.classList.add('col-hl');
+    });
+  });
+
+  tbl.addEventListener('mouseleave', ()=>{
+    tbl.querySelectorAll('.col-hl,.col-hd-hl').forEach(el=>{
+      el.classList.remove('col-hl','col-hd-hl');
+    });
+    lastCol = -1;
+  });
+}
+
+/* ════════════════════════════════
+   RESIZER
+════════════════════════════════ */
+(()=>{
+  const rs  = $('resizer');
+  const sb  = $('sidebar');
+  let sx, sw, drag=false;
+  rs.addEventListener('mousedown', e=>{
+    drag=true; sx=e.clientX; sw=sb.offsetWidth;
+    rs.classList.add('drag');
+    document.body.style.cursor='col-resize';
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e=>{
+    if(!drag) return;
+    const nw = Math.min(420, Math.max(140, sw+e.clientX-sx));
+    sb.style.width = nw+'px';
+  });
+  document.addEventListener('mouseup', ()=>{
+    if(!drag) return;
+    drag=false; rs.classList.remove('drag');
+    document.body.style.cursor='';
+    document.body.style.userSelect='';
+    ch1?.resize(); ch2?.resize();
+  });
+  rs.addEventListener('dblclick', ()=>{
+    sb.style.width='200px';
+    setTimeout(()=>{ ch1?.resize(); ch2?.resize(); },50);
+  });
+})();
+
+/* ════════════════════════════════
+   INIT — プルダウン・教育費 初期化
+════════════════════════════════ */
+
+// 年齢selectの選択肢を生成
+function buildAgeSelect(id, defVal, min=0, max=99, noneLabel=null){
+  const el = $(id); if(!el) return;
+  el.innerHTML = '';
+  if(noneLabel !== null){
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = noneLabel;
+    el.appendChild(opt);
+  }
+  for(let i=min; i<=max; i++){
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = String(i);
+    if(i===defVal) opt.selected = true;
+    el.appendChild(opt);
+  }
+}
+
+// 子供年齢selectの値取得（空・—はnullを返す）
+function getChildAgeVal(id){
+  const el=$(id); if(!el) return null;
+  if(el.value===''||el.value==='none') return null;
+  const v=parseInt(el.value); return isNaN(v)?null:v;
+}
+function resetChildAge(id){
+  const el=$(id); if(el) el.value='';
+}
+
+// 子供の年齢変化 → 子供行の表示 + 教育費セクション再構築
+function onChildAgeChange(){
+  const c1 = getChildAgeVal('c1Age');
+  const c2 = getChildAgeVal('c2Age');
+  // 第一子が選択済み → 第二子行を表示
+  $('c2Row').style.display = (c1!==null) ? '' : 'none';
+  if(c1===null){ resetChildAge('c2Age'); resetChildAge('c3Age'); }
+  // 第二子が選択済み → 第三子行を表示
+  $('c3Row').style.display = (c1!==null && c2!==null) ? '' : 'none';
+  if(c2===null) resetChildAge('c3Age');
+  buildEduSection();
+  simulate();
+}
+
+// 教育費セクションを子供の数に応じて動的生成（詳細ボタン付き）
+function buildEduSection(){
+  const sec = $('eduSection'); if(!sec) return;
+  const children = [
+    { nameId:'c1Name', ageId:'c1Age', idx:1, label:'第一子' },
+    { nameId:'c2Name', ageId:'c2Age', idx:2, label:'第二子' },
+    { nameId:'c3Name', ageId:'c3Age', idx:3, label:'第三子' },
+  ];
+
+  let html = '';
+  let hasChild = false;
+  for(const c of children){
+    const ca = getChildAgeVal(c.ageId);
+    if(ca===null) continue;
+    hasChild = true;
+    const name = $(c.nameId)?.value || c.label;
+    html += `
+      <div class="sec-div">${name}の教育費</div>
+      <button onclick="openEduModal(${c.idx})" style="
+        width:100%;padding:5px;margin-bottom:2px;
+        background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);
+        border-radius:3px;color:#fff;font-family:inherit;font-size:10px;font-weight:500;
+        cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+        <span>詳細設定</span>
+        <span id="eduSummary${c.idx}" style="font-size:9px;opacity:.7">—</span>
+      </button>`;
+  }
+  if(!hasChild) html = '';
+  sec.innerHTML = html;
+
+  // 各子供の要約を更新
+  [1,2,3].forEach(i => updateEduSummary(i));
+}
+
+// 教育費要約テキスト更新
+function updateEduSummary(idx){
+  const el = $(`eduSummary${idx}`); if(!el) return;
+  const d = eduData[idx];
+  const parts = [];
+  if(d.yochien !== 'none') parts.push('幼稚園');
+  if(d.sho !== 'public') parts.push('小(私)');
+  if(d.chu !== 'public') parts.push('中(私)');
+  if(d.ko !== 'public') parts.push('高(私)');
+  if(d.daigaku !== 'none') parts.push(d.daigaku==='national'?'国大':d.daigaku==='private_bun'?'私文':'私理');
+  if(d.daigakuin !== 'none') parts.push('院');
+  el.textContent = parts.length ? parts.join('・') : '全公立';
+}
+
+// 教育費データ（各子のデフォルト）
+const eduData = {
+  1: { yochien:'public', sho:'public', chu:'public', ko:'public', daigaku:'private_bun', daigakuin:'none' },
+  2: { yochien:'public', sho:'public', chu:'public', ko:'public', daigaku:'private_bun', daigakuin:'none' },
+  3: { yochien:'public', sho:'public', chu:'public', ko:'public', daigaku:'private_bun', daigakuin:'none' },
+};
+
+// 教育費コスト計算（年間、万円）
+function eduAnnualCost(d){
+  const yoMap = { none:0, public:2, private:6 };
+  const shoMap = { public:3.2, private:16.6 };
+  const chuMap = { public:4.9, private:14.3 };
+  const koMap  = { public:5.1, private:10.5 };
+  const daMap  = { none:0, national:54/4, private_bun:180/4, private_ri:250/4 };
+  const graMap = { none:0, yes:120/2 };
+  return {
+    yochien: yoMap[d.yochien]||0,
+    sho:     shoMap[d.sho]||0,
+    chu:     chuMap[d.chu]||0,
+    ko:      koMap[d.ko]||0,
+    daigaku: daMap[d.daigaku]||0,
+    daigakuin:graMap[d.daigakuin]||0,
+  };
+}
+
+// 教育費モーダルを開く
+function openEduModal(idx){
+  const existing = $('eduModal'); if(existing) existing.remove();
+  const d = eduData[idx];
+  const cNameId = ['','c1Name','c2Name','c3Name'][idx];
+  const childName = $(cNameId)?.value || `第${idx}子`;
+
+  const selOpts = (name, val, opts) => `
+    <select id="em_${name}" onchange="eduData[${idx}]['${name}']=this.value;updateEduSummary(${idx});simulate()" style="
+      width:100%;padding:4px 6px;border:1px solid #dde;border-radius:4px;
+      font-size:12px;font-family:inherit;color:#333;outline:none;background:#fff">
+      ${opts.map(([v,t])=>`<option value="${v}"${val===v?' selected':''}>${t}</option>`).join('')}
+    </select>`;
+
+  const row = (label, name, val, opts) => `
+    <div style="display:grid;grid-template-columns:72px 1fr;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="font-size:11px;color:#555;font-weight:500">${label}</div>
+      ${selOpts(name, val, opts)}
+    </div>`;
+
+  const modal = document.createElement('div');
+  modal.id = 'eduModal';
+  modal.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:600;background:#fff;border-radius:12px;
+    box-shadow:0 8px 40px rgba(0,0,0,.22);border:1px solid #e0e6f0;
+    width:300px;font-family:'Noto Sans JP',sans-serif;
+  `;
+  modal.innerHTML = `
+    <div style="background:#0a6ebd;border-radius:12px 12px 0 0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;font-weight:600;color:#fff">${childName}の教育プラン</div>
+      <button onclick="$('eduModal').remove()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:18px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:14px 16px">
+      ${row('幼稚園', 'yochien', d.yochien, [['none','なし'],['public','公立'],['private','私立']])}
+      ${row('小学校', 'sho', d.sho, [['public','公立'],['private','私立']])}
+      ${row('中学校', 'chu', d.chu, [['public','公立'],['private','私立']])}
+      ${row('高校',   'ko',  d.ko,  [['public','公立'],['private','私立']])}
+      ${row('大学',   'daigaku', d.daigaku, [['none','進学なし'],['national','国公立'],['private_bun','私立文系'],['private_ri','私立理系']])}
+      ${row('大学院', 'daigakuin', d.daigakuin, [['none','なし'],['yes','あり']])}
+      <div style="margin-top:10px;padding:8px 10px;background:#f0f6ff;border-radius:6px;font-size:11px;color:#444" id="eduCostPreview"></div>
+    </div>
+    <div style="padding:0 16px 14px">
+      <button onclick="$('eduModal').remove()" style="
+        width:100%;padding:8px;background:#0a6ebd;color:#fff;border:none;
+        border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">
+        確定して閉じる
+      </button>
+    </div>
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:-1;border-radius:0"
+      onclick="$('eduModal').remove()"></div>
+  `;
+  document.body.appendChild(modal);
+  updateEduCostPreview(idx);
+
+  // 各selectのchangeにコスト更新を追加
+  ['yochien','sho','chu','ko','daigaku','daigakuin'].forEach(name=>{
+    const sel = $(`em_${name}`);
+    if(sel) sel.addEventListener('change', ()=>updateEduCostPreview(idx));
+  });
+}
+
+function updateEduCostPreview(idx){
+  const el = $('eduCostPreview'); if(!el) return;
+  const d = eduData[idx];
+  const c = eduAnnualCost(d);
+  const total = Object.values(c).reduce((a,b)=>a+b,0);
+  el.innerHTML = `
+    <div style="font-weight:600;margin-bottom:4px;color:#0a6ebd">概算教育費（年間）</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:2px;line-height:1.7">
+      ${c.yochien?`<span>幼稚園</span><span>${c.yochien.toFixed(1)}万/年</span>`:''}
+      ${c.sho?`<span>小学校</span><span>${c.sho.toFixed(1)}万/年</span>`:''}
+      ${c.chu?`<span>中学校</span><span>${c.chu.toFixed(1)}万/年</span>`:''}
+      ${c.ko?`<span>高校</span><span>${c.ko.toFixed(1)}万/年</span>`:''}
+      ${c.daigaku?`<span>大学（4年間）</span><span>${(c.daigaku*4).toFixed(0)}万</span>`:''}
+      ${c.daigakuin?`<span>大学院（2年間）</span><span>${(c.daigakuin*2).toFixed(0)}万</span>`:''}
+      <div style="grid-column:1/-1;border-top:1px solid #ccd;margin:3px 0"></div>
+      <span style="font-weight:600">生涯教育費 目安</span>
+      <span style="font-weight:600;color:#0a6ebd">${Math.round(c.yochien*3+c.sho*6+c.chu*3+c.ko*3+c.daigaku*4+c.daigakuin*2)}万円</span>
+    </div>`;
+}
+
+// simulate内でeduDataを参照するよう教育費計算を更新
+function calcEduForAge(yr){
+  let total = 0;
+  const childAges = [
+    { baseAge: getChildAgeVal('c1Age'), idx:1 },
+    { baseAge: getChildAgeVal('c2Age'), idx:2 },
+    { baseAge: getChildAgeVal('c3Age'), idx:3 },
+  ];
+  for(const {baseAge, idx} of childAges){
+    if(baseAge===null) continue;
+    const ca = baseAge + yr;
+    const d = eduData[idx];
+    const c = eduAnnualCost(d);
+    if(ca>=3  && ca<6)  total += c.yochien;
+    if(ca>=6  && ca<12) total += c.sho;
+    if(ca>=12 && ca<15) total += c.chu;
+    if(ca>=15 && ca<18) total += c.ko;
+    if(ca>=18 && ca<22) total += c.daigaku;
+    if(ca>=22 && ca<24) total += c.daigakuin;
+  }
+  return total;
+}
+
+/* ════════════════════════════════
+   保険契約 モーダル
+════════════════════════════════ */
+// 保険契約データ
+const insContracts = [];
+
+function openInsModal(){
+  const existing = $('insModal'); if(existing){ existing.remove(); return; }
+  const total = insContracts.reduce((s,c)=>s+(parseFloat(c.premium)||0),0);
+
+  const modal = document.createElement('div');
+  modal.id = 'insModal';
+  modal.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:600;background:#fff;border-radius:12px;
+    box-shadow:0 8px 40px rgba(0,0,0,.22);
+    width:min(680px,95vw);max-height:85vh;
+    font-family:'Noto Sans JP',sans-serif;display:flex;flex-direction:column;
+  `;
+  modal.innerHTML = `
+    <div style="background:#0a6ebd;border-radius:12px 12px 0 0;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="font-size:14px;font-weight:600;color:#fff">保険契約</div>
+      <button onclick="$('insModal').remove()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:20px;cursor:pointer">×</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px" id="insTable">
+        <thead>
+          <tr style="background:#e8f0f8">
+            <th style="padding:6px 8px;text-align:left;border:1px solid #ccd">対象者</th>
+            <th style="padding:6px 8px;text-align:left;border:1px solid #ccd">保険種類</th>
+            <th style="padding:6px 8px;text-align:right;border:1px solid #ccd">保険料（円/月）</th>
+            <th style="padding:6px 8px;text-align:left;border:1px solid #ccd">払込種別</th>
+            <th style="padding:6px 8px;text-align:right;border:1px solid #ccd">死亡保険金（万）</th>
+            <th style="padding:6px 8px;text-align:right;border:1px solid #ccd">収入保障月額（万）</th>
+            <th style="padding:6px 8px;text-align:center;border:1px solid #ccd">編集</th>
+          </tr>
+        </thead>
+        <tbody id="insTableBody">
+          ${insContracts.length===0
+            ? `<tr><td colspan="7" style="text-align:center;padding:16px;color:#aaa;border:1px solid #eee">保険契約がありません</td></tr>`
+            : insContracts.map((c,i)=>`
+              <tr>
+                <td style="padding:5px 8px;border:1px solid #dde">${c.target}</td>
+                <td style="padding:5px 8px;border:1px solid #dde">${c.type}</td>
+                <td style="padding:5px 8px;border:1px solid #dde;text-align:right">${c.premium.toLocaleString()}</td>
+                <td style="padding:5px 8px;border:1px solid #dde">${c.payType}</td>
+                <td style="padding:5px 8px;border:1px solid #dde;text-align:right">${c.death||0}</td>
+                <td style="padding:5px 8px;border:1px solid #dde;text-align:right">${c.income||0}</td>
+                <td style="padding:5px 8px;border:1px solid #dde;text-align:center">
+                  <button onclick="removeIns(${i})" style="color:#c00;background:none;border:none;cursor:pointer;font-size:13px">削除</button>
+                </td>
+              </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f0f6ff">
+            <td colspan="2" style="padding:6px 8px;border:1px solid #ccd;font-weight:600">合計</td>
+            <td style="padding:6px 8px;border:1px solid #ccd;text-align:right;font-weight:600">${total.toLocaleString()}円/月</td>
+            <td colspan="2" style="padding:6px 8px;border:1px solid #ccd"></td>
+            <td colspan="2" style="padding:6px 8px;border:1px solid #ccd"></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- 新規追加フォーム -->
+      <div style="margin-top:16px;background:#f7f9fc;border:1px solid #dde;border-radius:8px;padding:14px">
+        <div style="font-size:12px;font-weight:600;color:#333;margin-bottom:10px">新規追加</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">対象者</label>
+            <select id="ins_target" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+              <option>本人</option><option>配偶者</option><option>第一子</option><option>第二子</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">保険種類</label>
+            <select id="ins_type" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+              <option>収入保障</option><option>定期死亡</option><option>終身死亡</option><option>医療</option><option>がん</option><option>学資</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">保険料（円/月）</label>
+            <input type="number" id="ins_premium" placeholder="例：15600" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+          </div>
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">払込種別</label>
+            <select id="ins_paytype" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+              <option>月払</option><option>年払</option><option>一時払</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">払込終了年齢</label>
+            <input type="number" id="ins_endAge" placeholder="—" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">死亡保険金（万）</label>
+            <input type="number" id="ins_death" placeholder="—" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+          </div>
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">収入保障月額（万）</label>
+            <input type="number" id="ins_income" placeholder="—" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+          </div>
+          <div>
+            <label style="font-size:10px;color:#666;display:block;margin-bottom:3px">保険期間終了年齢</label>
+            <input type="number" id="ins_period" placeholder="—" style="width:100%;padding:5px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit">
+          </div>
+        </div>
+        <button onclick="addInsContract()" style="width:100%;padding:8px;background:#0a6ebd;color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">
+          新規追加
+        </button>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid #eee;display:flex;gap:8px;flex-shrink:0">
+      <button onclick="applyInsContracts()" style="flex:1;padding:8px;background:#0a6ebd;color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">結果反映</button>
+      <button onclick="$('insModal').remove()" style="padding:8px 16px;background:#fff;color:#555;border:1px solid #ccd;border-radius:6px;font-family:inherit;font-size:12px;cursor:pointer">閉じる</button>
+    </div>
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:-1;border-radius:0" onclick="$('insModal').remove()"></div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function addInsContract(){
+  const premium = parseFloat($('ins_premium')?.value)||0;
+  if(!premium){ alert('保険料を入力してください'); return; }
+  insContracts.push({
+    target:  $('ins_target')?.value||'本人',
+    type:    $('ins_type')?.value||'収入保障',
+    premium: premium,
+    payType: $('ins_paytype')?.value||'月払',
+    endAge:  parseFloat($('ins_endAge')?.value)||null,
+    death:   parseFloat($('ins_death')?.value)||0,
+    income:  parseFloat($('ins_income')?.value)||0,
+    period:  parseFloat($('ins_period')?.value)||null,
+  });
+  $('insModal')?.remove();
+  openInsModal();
+}
+
+function removeIns(idx){
+  insContracts.splice(idx,1);
+  $('insModal')?.remove();
+  openInsModal();
+}
+
+function applyInsContracts(){
+  // 保険料合計をinsMonthlyフィールドに反映（万/月換算）
+  const totalYen = insContracts.reduce((s,c)=>s+(c.premium||0),0);
+  const totalMan = totalYen / 10000;
+  const el = $('insMonthly');
+  if(el){ el.value = totalMan.toFixed(2); }
+  $('insModal')?.remove();
+  simulate();
+}
+// 生活費データ（初期値）
+const livingItems = [
+  { id:'food',     label:'食費',       val:6.5,  step:0.5 },
+  { id:'water',    label:'水道代',      val:0.5,  step:0.1 },
+  { id:'electric', label:'電気・ガス',  val:1.2,  step:0.1 },
+  { id:'comm',     label:'通信費',      val:1.0,  step:0.1 },
+  { id:'daily',    label:'日用雑貨',    val:1.5,  step:0.5 },
+  { id:'entmt',    label:'趣味・娯楽',  val:2.0,  step:0.5 },
+  { id:'clothes',  label:'被服・美容',  val:1.0,  step:0.5 },
+  { id:'social',   label:'交際費',      val:0.8,  step:0.5 },
+  { id:'gasoline', label:'ガソリン代',  val:0.5,  step:0.1 },
+  { id:'otherliv', label:'その他',      val:1.5,  step:0.5 },
+];
+
+function getLivingTotal(){
+  return livingItems.reduce((s,item)=>s+item.val, 0);
+}
+function updateLivingTotalDisplay(){
+  const el = $('livingTotal');
+  if(el) el.textContent = getLivingTotal().toFixed(1);
+}
+
+function openLivingModal(){
+  const existing = $('livingModal'); if(existing){ existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'livingModal';
+  modal.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:600;background:#fff;border-radius:12px;
+    box-shadow:0 8px 40px rgba(0,0,0,.22);border:1px solid #e0e6f0;
+    width:320px;font-family:'Noto Sans JP',sans-serif;
+  `;
+
+  const rows = livingItems.map(item=>`
+    <div style="display:grid;grid-template-columns:90px 1fr auto;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #f0f4f8">
+      <span style="font-size:12px;color:#444">${item.label}</span>
+      <input type="number" id="lv_${item.id}" value="${item.val}" step="${item.step}" min="0"
+        style="width:100%;padding:4px 6px;border:1px solid #dde;border-radius:4px;font-size:12px;font-family:inherit;text-align:right;outline:none"
+        oninput="updateLivingItem('${item.id}',this.value)">
+      <span style="font-size:11px;color:#888;white-space:nowrap">万/月</span>
+    </div>`).join('');
+
+  modal.innerHTML = `
+    <div style="background:#0a6ebd;border-radius:12px 12px 0 0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;font-weight:600;color:#fff">生活費 明細入力</div>
+      <button onclick="$('livingModal').remove()" style="background:none;border:none;color:rgba(255,255,255,.8);font-size:18px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div style="padding:10px 16px;max-height:60vh;overflow-y:auto">
+      ${rows}
+    </div>
+    <div style="padding:10px 16px;background:#f7f9fc;border-top:1px solid #e0e6f0;border-radius:0 0 12px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:600;color:#333">明細合計</span>
+        <span id="lv_total" style="font-size:16px;font-weight:700;color:#0a6ebd;font-family:'DM Mono',monospace">${getLivingTotal().toFixed(1)} 万/月</span>
+      </div>
+      <button onclick="$('livingModal').remove()" style="
+        width:100%;margin-top:10px;padding:8px;background:#0a6ebd;color:#fff;border:none;
+        border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">
+        確定して閉じる
+      </button>
+    </div>
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:-1;border-radius:0"
+      onclick="$('livingModal').remove()"></div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function updateLivingItem(id, raw){
+  const val = parseFloat(raw)||0;
+  const item = livingItems.find(i=>i.id===id);
+  if(item) item.val = val;
+  // モーダル内の合計更新
+  const totEl = $('lv_total');
+  if(totEl) totEl.textContent = getLivingTotal().toFixed(1)+' 万/月';
+  updateLivingTotalDisplay();
+  simulate();
+}
+
+// 初期化
+buildAgeSelect('myAge', 30, 18, 75);
+buildAgeSelect('spAge', 28, 18, 75);
+buildAgeSelect('c1Age', 2,  0, 25, '—（なし）');
+buildAgeSelect('c2Age', null, 0, 25, '—（なし）');
+buildAgeSelect('c3Age', null, 0, 25, '—（なし）');
+
+// changeイベント登録
+$('c1Age').addEventListener('change', onChildAgeChange);
+$('c2Age').addEventListener('change', onChildAgeChange);
+$('c3Age').addEventListener('change', onChildAgeChange);
+
+// 生活費合計表示
+updateLivingTotalDisplay();
+
+// 初期状態：第一子がデフォルト2歳なので第二子行表示・第三子は非表示
+onChildAgeChange(); // 表示制御 + 教育費セクション構築 + simulate
+
+</script>
+</body>
+</html>
